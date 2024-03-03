@@ -23,4 +23,14 @@ defmodule ReservationApp.Reservations do
     Reservation
     |> Repo.all()
   end
+
+  def list_reservations_for_user_id(id) do
+    from(r in Reservation, where: r.user_id == ^id)
+    |> Repo.all()
+  end
+
+  def list_reservations_for_other_users(id) do
+    from(r in Reservation, where: r.user_id != ^id)
+    |> Repo.all()
+  end
 end

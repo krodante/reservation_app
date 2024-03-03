@@ -682,51 +682,13 @@ defmodule ReservationAppWeb.CoreComponents do
     doc: "a %Phoenix.HTML.Form{}/field name tuple, for example: @form[:start_date]"
   )
 
-  attr(:end_date_field, :any,
-    doc: "a %Phoenix.HTML.Form{}/field name tuple, for example: @form[:end_date]"
-  )
-
   attr(:required, :boolean, default: false)
   attr(:readonly, :boolean, default: false)
   attr(:min, :any, default: @min_date, doc: "the earliest date that can be set")
   attr(:errors, :list, default: [])
   attr(:form, :any)
-
-  def date_range_picker(assigns) do
-    ~H"""
-    <.live_component
-      module={ReservationAppWeb.Components.DateRangePicker}
-      label={@label}
-      id={@id}
-      form={@form}
-      start_date_field={@start_date_field}
-      end_date_field={@end_date_field}
-      required={@required}
-      readonly={@readonly}
-      is_range?
-      min={@min}
-    />
-    <div phx-feedback-for={@start_date_field.name}>
-      <.error :for={msg <- @start_date_field.errors}><%= format_form_error(msg) %></.error>
-    </div>
-    <div phx-feedback-for={@end_date_field.name}>
-      <.error :for={msg <- @end_date_field.errors}><%= format_form_error(msg) %></.error>
-    </div>
-    """
-  end
-
-  attr(:id, :string, required: true)
-  attr(:label, :string, required: true)
-
-  attr(:start_date_field, :any,
-    doc: "a %Phoenix.HTML.Form{}/field name tuple, for example: @form[:start_date]"
-  )
-
-  attr(:required, :boolean, default: false)
-  attr(:readonly, :boolean, default: false)
-  attr(:min, :any, default: @min_date, doc: "the earliest date that can be set")
-  attr(:errors, :list, default: [])
-  attr(:form, :any)
+  attr(:reservations, :list)
+  attr(:other_user_reservations, :list)
 
   def date_picker(assigns) do
     ~H"""
@@ -740,6 +702,8 @@ defmodule ReservationAppWeb.CoreComponents do
       readonly={@readonly}
       is_range?={false}
       min={@min}
+      reservations={@reservations}
+      other_user_reservations={@other_user_reservations}
     />
     <div phx-feedback-for={@start_date_field.name}>
       <.error :for={msg <- @start_date_field.form.errors}><%= format_form_error(msg) %></.error>

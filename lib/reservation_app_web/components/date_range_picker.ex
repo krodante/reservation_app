@@ -97,8 +97,10 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
                 before_min_date?(day, @min) && "text-gray-300 cursor-not-allowed",
                 !before_min_date?(day, @min) && "hover:bg-blue-300 hover:border hover:border-black",
                 other_month?(day, @current.date) && "text-gray-500",
-                selected_range?(day, @range_start, @hover_range_end || @range_end) &&
-                  "hover:bg-blue-500 bg-blue-500 text-white"
+                reserved_date?(day, @reservations) &&
+                  "hover:bg-blue-500 bg-blue-500 text-white",
+                reserved_date?(day, @other_user_reservations) &&
+                  "hover:bg-red-500 bg-red-500 text-white"
               ]}
             >
               <time
@@ -129,8 +131,10 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
       |> assign(:range_end, nil)
       |> assign(:hover_range_end, nil)
       |> assign(:readonly, false)
-      |> assign(:selected_date, nil)
+      |> assign(:reserved_date, nil)
       |> assign(:form, nil)
+      |> assign(:reservations, [])
+      |> assign(:other_user_reservations, [])
     }
   end
 
@@ -151,44 +155,44 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
     }
   end
 
-  @impl true
-  def handle_event("open-calendar", _, socket) do
-    {:noreply, socket |> assign(:calendar?, true)}
-  end
+  # @impl true
+  # def handle_event("open-calendar", _, socket) do
+  #   {:noreply, socket |> assign(:calendar?, true)}
+  # end
 
-  @impl true
-  def handle_event("close-calendar", _, %{assigns: %{range_start: nil, range_end: nil}} = socket) do
-    {:noreply, socket |> assign(:calendar?, false)}
-  end
+  # @impl true
+  # def handle_event("close-calendar", _, %{assigns: %{range_start: nil, range_end: nil}} = socket) do
+  #   {:noreply, socket |> assign(:calendar?, false)}
+  # end
 
-  @impl true
-  def handle_event("close-calendar", _, socket) do
-    [range_start, range_end] =
-      [
-        socket.assigns.range_start,
-        socket.assigns.range_end || socket.assigns.range_start
-      ]
-      |> Enum.sort(&(DateTime.compare(&1, &2) != :gt))
+  # @impl true
+  # def handle_event("close-calendar", _, socket) do
+  #   [range_start, range_end] =
+  #     [
+  #       socket.assigns.range_start,
+  #       socket.assigns.range_end || socket.assigns.range_start
+  #     ]
+  #     |> Enum.sort(&(DateTime.compare(&1, &2) != :gt))
 
-    attrs = %{
-      id: socket.assigns.id,
-      start_date: range_start,
-      end_date: range_end,
-      form: socket.assigns.form
-    }
+  #   attrs = %{
+  #     id: socket.assigns.id,
+  #     start_date: range_start,
+  #     end_date: range_end,
+  #     form: socket.assigns.form
+  #   }
 
-    {
-      :noreply,
-      socket
-      |> assign(:calendar?, false)
-      |> assign(:end_date_field, set_field_value(socket.assigns, :end_date_field, range_end))
-      |> assign(
-        :start_date_field,
-        set_field_value(socket.assigns, :start_date_field, range_start)
-      )
-      |> assign(:state, @initial_state)
-    }
-  end
+  #   {
+  #     :noreply,
+  #     socket
+  #     |> assign(:calendar?, false)
+  #     |> assign(:end_date_field, set_field_value(socket.assigns, :end_date_field, range_end))
+  #     |> assign(
+  #       :start_date_field,
+  #       set_field_value(socket.assigns, :start_date_field, range_start)
+  #     )
+  #     |> assign(:state, @initial_state)
+  #   }
+  # end
 
   @impl true
   def handle_event("today", _, socket) do
@@ -233,23 +237,6 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
         |> assign(ranges)
         |> assign(:state, state)
       }
-    end
-  end
-
-  @impl true
-  def handle_event("cursor-move", date_str, socket) do
-    date = from_str!(date_str)
-
-    if Date.compare(socket.assigns.min, DateTime.to_date(date)) == :gt do
-      {:noreply, socket}
-    else
-      hover_range_end =
-        case socket.assigns.state do
-          :set_end -> date
-          _ -> nil
-        end
-
-      {:noreply, socket |> assign(:hover_range_end, hover_range_end)}
     end
   end
 
@@ -372,20 +359,11 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
     Date.beginning_of_month(day) != Date.beginning_of_month(current_date)
   end
 
-  defp selected_range?(_day, nil, nil), do: false
+  defp reserved_date?(_day, []), do: false
 
-  defp selected_range?(day, range_start, nil) do
-    day == DateTime.to_date(range_start)
-  end
-
-  defp selected_range?(day, nil, range_end) do
-    day == DateTime.to_date(range_end)
-  end
-
-  defp selected_range?(day, range_start, range_end) do
-    start_date = DateTime.to_date(range_start)
-    end_date = DateTime.to_date(range_end)
-    day in Date.range(start_date, end_date)
+  defp reserved_date?(day, reservations) do
+    dates = Enum.map(reservations, &(&1.date))
+    day in dates
   end
 
   defp format_date(date) do

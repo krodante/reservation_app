@@ -18,7 +18,7 @@ defmodule ReservationAppWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
-    live "/reservations", ReservationsLive
+    live "/reservations", Live.ReservationsLive
   end
 
   # Other scopes may use custom stacks.
