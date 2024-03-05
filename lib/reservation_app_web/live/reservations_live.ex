@@ -3,6 +3,8 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
   alias ReservationApp.Reservations
   use ReservationAppWeb, :live_view
 
+  @topic "reservations"
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -23,6 +25,8 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
 
   @impl true
   def mount(_params, session, socket) do
+    ReservationAppWeb.Endpoint.subscribe(@topic)
+
     changeset = Reservations.change_reservation(%Reservation{}, %{user_id: session["user_id"]})
 
     {
@@ -31,7 +35,7 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
       |> assign(:form, to_form(changeset))
       |> assign(:reservation, %Reservation{})
       |> assign(:user_id, session["user_id"])
-      |> assign(:reservations, Reservations.list_reservations_for_user_id(session["user_id"]))
+      |> assign(:user_reservations, Reservations.list_reservations_for_user_id(session["user_id"]))
       |> assign(:other_user_reservations, Reservations.list_reservations_for_other_users(session["user_id"]))
     }
   end
@@ -47,14 +51,27 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
 
   @impl true
   def handle_info({:updated_reservation, attrs}, socket) do
+    reservation_attrs = %{date: attrs.range_start, user_id: socket.assigns.user_id}
+
     updated_socket =
-      case Reservations.create_reservation(%{date: attrs.range_start, user_id: socket.assigns.user_id}) do
-        {:ok, reservation} ->
+      if Reservations.date_is_open?(reservation_attrs) do
+        case Reservations.create_reservation(reservation_attrs) do
+          {:ok, reservation} ->
+            ReservationAppWeb.Endpoint.broadcast_from(self(), @topic, "date_reserved", reservation)
+
             socket
             |> assign(socket.assigns |> Map.delete(:flash))
             |> assign(:id, "date_picker")
             |> assign(:reservation, reservation)
-        {:error, _message} -> socket
+            |> assign(:user_reservations, Reservations.list_reservations_for_user_id(reservation.user_id))
+            |> assign(:other_user_reservations, Reservations.list_reservations_for_other_users(reservation.user_id))
+
+          {:error, _} ->
+            socket
+        end
+      else
+        ReservationAppWeb.Endpoint.broadcast_from(self(), @topic, "date_already_taken", attrs)
+        socket
       end
 
     date_picker_assigns = %{
@@ -64,12 +81,30 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
       start_date_field: socket.assigns.form[:date],
       min: Date.utc_today() |> Date.add(-7),
       required: true,
-      reservations: Reservations.list_reservations_for_user_id(socket.assigns.user_id),
-      other_user_reservations: Reservations.list_reservations_for_other_users(socket.assigns.user_id)
+      reservations: updated_socket.assigns.reservations,
+      other_user_reservations: updated_socket.assigns.other_user_reservations
     }
 
     send_update(ReservationAppWeb.Components.DateRangePicker, date_picker_assigns)
 
     {:noreply, updated_socket}
+  end
+
+  @impl true
+  def handle_info(%{topic: @topic, event: "date_reserved", payload: state} = sig, socket) do
+    {
+      :noreply,
+      socket
+      |> assign(socket.assigns |> Map.delete(:flash))
+      |> assign(%{other_user_reservations: [state | socket.assigns.other_user_reservations]})
+    }
+  end
+
+  @impl true
+  def handle_info(%{topic: @topic, event: "date_already_taken", payload: state} = sig, socket) do
+    {
+      :noreply,
+      socket
+    }
   end
 end

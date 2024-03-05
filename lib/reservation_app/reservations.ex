@@ -33,4 +33,12 @@ defmodule ReservationApp.Reservations do
     from(r in Reservation, where: r.user_id != ^id)
     |> Repo.all()
   end
+
+  def date_is_open?(%{date: date}) do
+    from(r in Reservation, where: r.date == ^date)
+    |> Repo.one()
+    |> is_nil()
+  end
+
+  def date_is_open?(_), do: true
 end
