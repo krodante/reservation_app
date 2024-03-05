@@ -3,9 +3,11 @@ defmodule ReservationApp.Repo.Migrations.AddReservationsTable do
 
   def change do
     create table(:reservations) do
-      add(:date, :date)
+      add(:date, :date, null: false)
       add(:user_id, :string)
       add(:user_slug, :string)
     end
+
+    create(unique_index(:reservations, [:date]))
   end
 end
