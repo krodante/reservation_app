@@ -39,7 +39,7 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
   def mount(_params, %{"user_id" => user_id}, socket) do
     ReservationAppWeb.Endpoint.subscribe(@topic)
 
-    changeset = Reservations.change_reservation(%Reservation{}, %{user_id: user_id})
+    changeset = Reservations.change_reservation(%Reservation{}, %{user_id: user_id, user_slug: MnemonicSlugs.generate_slug()})
 
     {
       :ok,
