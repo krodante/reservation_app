@@ -11,7 +11,8 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
   def render(assigns) do
     ~H"""
     <div :if={@confirmation}>
-      <.button phx-click="confirm-date">Confirm <%= @locking_date |> Date.to_string() %></.button>
+      <.button phx-click="confirm-date"><%= "Confirm #{@locking_date |> Date.to_string()}" %> </.button>
+      <p><%= "#{@count} seconds left to confirm" %></p>
     </div>
     <.simple_form for={@form} id="reservation_form">
       <.date_picker
@@ -45,6 +46,7 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
       :ok,
       socket
       |> assign(:form, to_form(changeset))
+      |> assign(:count, 5)
       |> assign(:confirmation, false)
       |> assign(:lock_started, false)
       |> assign(:locking_user, nil)
@@ -104,6 +106,8 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
       if Reservations.date_is_available?(reservation_attrs) do
         LocksServer.insert(reservation_attrs.date, reservation_attrs.user_id)
 
+        :timer.send_interval(1000, self(), :tick)
+
         ReservationAppWeb.Endpoint.broadcast_from(
           self(),
           @topic,
@@ -138,6 +142,15 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
     send_update(ReservationAppWeb.Components.DateRangePicker, date_picker_assigns)
 
     {:noreply, updated_socket}
+  end
+
+  @impl true
+  def handle_info(:tick, socket) do
+    {
+      :noreply,
+      socket
+      |> assign(:count, socket.assigns.count - 1)
+    }
   end
 
   @impl true
