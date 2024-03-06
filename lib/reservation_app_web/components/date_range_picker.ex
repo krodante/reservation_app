@@ -100,7 +100,9 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
                 reserved_date?(day, @reservations) &&
                   "hover:bg-blue-500 bg-blue-500 text-white",
                 reserved_date?(day, @other_user_reservations) &&
-                  "hover:bg-red-500 bg-red-500 text-white"
+                  "hover:bg-red-500 bg-red-500 text-white",
+                locking_date?(day, @locking_date) &&
+                  "hover:bg-yellow-500 bg-yellow-500 text-black"
               ]}
             >
               <time
@@ -329,25 +331,25 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
     }
   end
 
-  defp set_field_value(nil, _field, _value), do: nil
+  # defp set_field_value(nil, _field, _value), do: nil
 
-  defp set_field_value(assigns, field, value) when is_binary(value) do
-    if Map.has_key?(assigns, field) and is_map(assigns[field]) do
-      {:ok, value, _} = DateTime.from_iso8601(value)
-      Map.put(assigns[field], :value, value)
-    else
-      nil
-    end
-  end
+  # defp set_field_value(assigns, field, value) when is_binary(value) do
+  #   if Map.has_key?(assigns, field) and is_map(assigns[field]) do
+  #     {:ok, value, _} = DateTime.from_iso8601(value)
+  #     Map.put(assigns[field], :value, value)
+  #   else
+  #     nil
+  #   end
+  # end
 
-  defp set_field_value(assigns, field, value) do
-    if Map.has_key?(assigns, field) and is_map(assigns[field]) do
-      {:ok, value, _} = DateTime.from_iso8601(Date.to_string(value) <> "T00:00:00Z")
-      Map.put(assigns[field], :value, value)
-    else
-      nil
-    end
-  end
+  # defp set_field_value(assigns, field, value) do
+  #   if Map.has_key?(assigns, field) and is_map(assigns[field]) do
+  #     {:ok, value, _} = DateTime.from_iso8601(Date.to_string(value) <> "T00:00:00Z")
+  #     Map.put(assigns[field], :value, value)
+  #   else
+  #     nil
+  #   end
+  # end
 
   defp before_min_date?(day, min) do
     Date.compare(day, min) == :lt
@@ -364,6 +366,11 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
   defp reserved_date?(day, reservations) do
     dates = Enum.map(reservations, &(&1.date))
     day in dates
+  end
+
+  defp locking_date?(_day, nil), do: false
+  defp locking_date?(day, locking_date) do
+    day == DateTime.to_date(locking_date)
   end
 
   defp format_date(date) do

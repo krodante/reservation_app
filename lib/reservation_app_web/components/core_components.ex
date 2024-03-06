@@ -689,6 +689,7 @@ defmodule ReservationAppWeb.CoreComponents do
   attr(:form, :any)
   attr(:reservations, :list)
   attr(:other_user_reservations, :list)
+  attr(:locking_date, :any)
 
   def date_picker(assigns) do
     ~H"""
@@ -704,6 +705,7 @@ defmodule ReservationAppWeb.CoreComponents do
       min={@min}
       reservations={@reservations}
       other_user_reservations={@other_user_reservations}
+      locking_date={@locking_date}
     />
     <div phx-feedback-for={@start_date_field.name}>
       <.error :for={msg <- @start_date_field.form.errors}><%= format_form_error(msg) %></.error>

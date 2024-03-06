@@ -17,7 +17,8 @@ defmodule ReservationApp.Application do
       # Start a worker by calling: ReservationApp.Worker.start_link(arg)
       # {ReservationApp.Worker, arg},
       # Start to serve requests, typically the last entry
-      ReservationAppWeb.Endpoint
+      ReservationAppWeb.Endpoint,
+      ReservationApp.LocksServer
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

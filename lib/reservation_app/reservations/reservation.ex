@@ -14,5 +14,4 @@ defmodule ReservationApp.Reservations.Reservation do
     reservation
     |> cast(attrs, @fields)
   end
-
 end

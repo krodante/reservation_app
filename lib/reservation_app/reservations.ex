@@ -1,6 +1,7 @@
 defmodule ReservationApp.Reservations do
   import Ecto.Query
 
+  alias ReservationApp.LocksServer
   alias ReservationApp.Reservations.Reservation
   alias ReservationApp.Repo
 
@@ -41,4 +42,19 @@ defmodule ReservationApp.Reservations do
   end
 
   def date_is_open?(_), do: true
+
+  def cache_is_nil?(%{date: date}) do
+    result = :ets.lookup(:locked_dates, date)
+    with [{_key, _value, expiry}] <- result,
+      true <- :erlang.system_time(:second) < expiry
+    do
+      false
+    else
+      [] -> true
+      false ->
+        LocksServer.remove(date)
+        true
+    end
+  end
+  def cache_is_nil?(_), do: true
 end
