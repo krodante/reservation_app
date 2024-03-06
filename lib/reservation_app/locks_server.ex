@@ -8,7 +8,15 @@ defmodule ReservationApp.LocksServer do
 
   def init(_) do
     IO.puts("Creating ETS #{@name}")
-    :ets.new(:locked_dates, [:set, :public, :named_table, read_concurrency: true, write_concurrency: true])
+
+    :ets.new(:locked_dates, [
+      :set,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+
     {:ok, "ETS Created"}
   end
 
@@ -32,6 +40,12 @@ defmodule ReservationApp.LocksServer do
   end
 
   def create_ets_bucket() do
-    :ets.new(:locked_dates, [:set, :public, :named_table, read_concurrency: true, write_concurrency: true])
+    :ets.new(:locked_dates, [
+      :set,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
   end
 end

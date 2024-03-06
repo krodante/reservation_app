@@ -45,16 +45,19 @@ defmodule ReservationApp.Reservations do
 
   def cache_is_nil?(%{date: date}) do
     result = :ets.lookup(:locked_dates, date)
+
     with [{_key, _value, expiry}] <- result,
-      true <- :erlang.system_time(:second) < expiry
-    do
+         true <- :erlang.system_time(:second) < expiry do
       false
     else
-      [] -> true
+      [] ->
+        true
+
       false ->
         LocksServer.remove(date)
         true
     end
   end
+
   def cache_is_nil?(_), do: true
 end

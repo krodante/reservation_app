@@ -27,12 +27,7 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
         <.icon name="hero-calendar" class="absolute top-10 right-3 flex text-gray-400" />
       </div>
 
-      <div
-        :if={@calendar?}
-        id={"#{@id}_calendar"}
-        class="absolute z-50 w-72"
-        phx-target={@myself}
-      >
+      <div :if={@calendar?} id={"#{@id}_calendar"} class="absolute z-50 w-72" phx-target={@myself}>
         <div
           id="calendar_background"
           class="w-full bg-white rounded-md ring-1 ring-black ring-opacity-2 focus:outline-none p-3"
@@ -364,11 +359,12 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
   defp reserved_date?(_day, []), do: false
 
   defp reserved_date?(day, reservations) do
-    dates = Enum.map(reservations, &(&1.date))
+    dates = Enum.map(reservations, & &1.date)
     day in dates
   end
 
   defp locking_date?(_day, nil), do: false
+
   defp locking_date?(day, locking_date) do
     day == DateTime.to_date(locking_date)
   end
