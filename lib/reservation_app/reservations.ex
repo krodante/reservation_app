@@ -36,7 +36,10 @@ defmodule ReservationApp.Reservations do
   end
 
   def date_is_available?(%{date: date}) do
-    date_is_open?(date) && date_not_locked?(date)
+    case date_is_open?(date) && date_not_locked?(date) do
+      true -> {:date_available, true}
+      false -> {:date_available, false}
+    end
   end
 
   def date_is_available?(_), do: true
@@ -51,15 +54,31 @@ defmodule ReservationApp.Reservations do
     result = :ets.lookup(:locked_dates, date)
 
     with [{_key, _value, expiry}] <- result,
-         true <- :erlang.system_time(:second) < expiry do
+         {:not_expired, true} <- {:not_expired, :erlang.system_time(:second) < expiry} do
       false
     else
       [] ->
         true
 
-      false ->
+      {:not_expired, false} ->
         LocksServer.remove(date)
         true
+    end
+  end
+
+  def already_locking?(%{user_id: user_id}) do
+    result = :ets.lookup(:locked_dates, user_id)
+
+    with [{_key, _value, expiry}] <- result,
+         {:not_expired, true} <- {:not_expired, :erlang.system_time(:second) < expiry} do
+      {:already_locking, true}
+    else
+      [] ->
+        {:already_locking, false}
+
+      {:not_expired, false} ->
+        LocksServer.remove(user_id)
+        {:already_locking, false}
     end
   end
 end

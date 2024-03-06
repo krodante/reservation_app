@@ -21,13 +21,13 @@ defmodule ReservationApp.LocksServer do
     {:ok, "ETS Created"}
   end
 
-  def insert(date, user_slug) do
+  def insert(key, value) do
     expires = :erlang.system_time(:second) + @ttl
-    GenServer.call(@name, {:insert, {date, user_slug, expires}})
+    GenServer.call(@name, {:insert, {key, value, expires}})
   end
 
-  def remove(date) do
-    GenServer.call(@name, {:delete, date})
+  def remove(key) do
+    GenServer.call(@name, {:delete, key})
   end
 
   def handle_call({:insert, data}, _ref, state) do

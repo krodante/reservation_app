@@ -4,16 +4,25 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
   alias ReservationApp.LocksServer
   alias ReservationApp.Reservations
   alias ReservationApp.Reservations.Reservation
+  alias ReservationAppWeb.Components.DateRangePicker
+  alias ReservationAppWeb.Endpoint
 
   @topic "reservations"
 
   @impl true
   def render(assigns) do
     ~H"""
-    <div :if={@confirmation}>
-      <.button phx-click="confirm-date"><%= "Confirm #{@locking_date |> Date.to_string()}" %> </.button>
-      <p><%= "#{@count} seconds left to confirm" %></p>
+    <div :if={@message}>
+      <h3><%= @message %></h3>
     </div>
+
+    <div :if={@confirmation}>
+      <.button phx-click="confirm-date">
+        <%= "Confirm #{@locking_date |> Date.to_string()}" %>
+      </.button>
+      <span><%= "#{@count} seconds left to confirm" %></span>
+    </div>
+
     <.simple_form for={@form} id="reservation_form">
       <.date_picker
         label="Reserve a date!"
@@ -27,69 +36,61 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
         locking_date={@locking_date}
       />
     </.simple_form>
-
-    <%!-- <div>
-        <table>
-          <%= for
-        </table>
-      </div> --%>
     """
   end
 
   @impl true
   def mount(_params, %{"user_id" => user_id}, socket) do
-    ReservationAppWeb.Endpoint.subscribe(@topic)
+    Endpoint.subscribe(@topic)
 
-    changeset = Reservations.change_reservation(%Reservation{}, %{user_id: user_id, user_slug: MnemonicSlugs.generate_slug()})
+    changeset =
+      Reservations.change_reservation(%Reservation{}, %{
+        user_id: user_id,
+        user_slug: MnemonicSlugs.generate_slug()
+      })
 
     {
       :ok,
       socket
       |> assign(:form, to_form(changeset))
-      |> assign(:count, 5)
-      |> assign(:confirmation, false)
-      |> assign(:lock_started, false)
-      |> assign(:locking_user, nil)
-      |> assign(:locking_date, nil)
-      |> assign(:timer_ref, nil)
+      |> reset_assigns()
+      |> assign(
+        :other_user_reservations,
+        Reservations.list_reservations_for_other_users(user_id)
+      )
       |> assign(:reservation, %Reservation{})
       |> assign(:user_id, user_id)
       |> assign(
         :user_reservations,
         Reservations.list_reservations_for_user_id(user_id)
       )
-      |> assign(
-        :other_user_reservations,
-        Reservations.list_reservations_for_other_users(user_id)
-      )
     }
   end
 
   @impl true
   def handle_event("confirm-date", _params, socket) do
-    reservation_attrs = %{date: socket.assigns.locking_date, user_id: socket.assigns.user_id}
+    res_attrs = %{date: socket.assigns.locking_date, user_id: socket.assigns.user_id}
 
     updated_socket =
-      case Reservations.create_reservation(reservation_attrs) do
+      case Reservations.create_reservation(res_attrs) do
         {:ok, reservation} ->
-          ReservationAppWeb.Endpoint.broadcast_from(self(), @topic, "date_reserved", reservation)
-          Process.cancel_timer(socket.assigns.timer_ref)
+          Endpoint.broadcast_from(self(), @topic, "date_reserved", reservation)
+          LocksServer.remove(reservation.date)
+          LocksServer.remove(reservation.user_id)
+          Process.cancel_timer(socket.assigns.lock_timer)
 
           socket
           |> assign(socket.assigns |> Map.delete(:flash))
-          |> assign(:id, "date_picker")
+          |> reset_assigns()
+          |> assign(
+            :other_user_reservations,
+            Reservations.list_reservations_for_other_users(reservation.user_id)
+          )
           |> assign(:reservation, reservation)
           |> assign(
             :user_reservations,
             Reservations.list_reservations_for_user_id(reservation.user_id)
           )
-          |> assign(
-            :other_user_reservations,
-            Reservations.list_reservations_for_other_users(reservation.user_id)
-          )
-          |> assign(:locking_date, nil)
-          |> assign(:confirmation, false)
-          |> assign(:timer_ref, nil)
 
         {:error, _} ->
           socket
@@ -100,34 +101,103 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
 
   @impl true
   def handle_info({:updated_reservation, attrs}, socket) do
-    reservation_attrs = %{date: attrs.range_start, user_id: socket.assigns.user_id}
+    res_attrs = %{date: attrs.range_start, user_id: socket.assigns.user_id}
 
     updated_socket =
-      if Reservations.date_is_available?(reservation_attrs) do
-        LocksServer.insert(reservation_attrs.date, reservation_attrs.user_id)
-
-        :timer.send_interval(1000, self(), :tick)
-
-        ReservationAppWeb.Endpoint.broadcast_from(
-          self(),
-          @topic,
-          "lock_started",
-          reservation_attrs
-        )
-
-        timer_ref = Process.send_after(self(), "lock_ended", 5000)
+      with {:date_available, true} <- Reservations.date_is_available?(res_attrs),
+           {:already_locking, false} <- Reservations.already_locking?(res_attrs) do
+        LocksServer.insert(res_attrs.date, res_attrs.user_id)
+        LocksServer.insert(res_attrs.user_id, res_attrs.date)
+        Endpoint.broadcast_from(self(), @topic, "lock_started", res_attrs)
+        lock_timer = Process.send_after(self(), "lock_ended", 5000)
+        :erlang.send_after(1000, self(), :tick)
 
         socket
         |> assign(socket.assigns |> Map.delete(:flash))
         |> assign(:confirmation, true)
-        |> assign(:locking_date, reservation_attrs.date)
-        |> assign(:timer_ref, timer_ref)
+        |> assign(:locking_date, res_attrs.date)
+        |> assign(:lock_timer, lock_timer)
+        |> assign(:count, 5)
       else
-        ReservationAppWeb.Endpoint.broadcast_from(self(), @topic, "date_already_taken", attrs)
-        socket
+        {:date_available, false} ->
+          socket
+
+        {:already_locking, true} ->
+          send(self(), "already_locking")
+          socket
       end
 
-    date_picker_assigns = %{
+    send_update(DateRangePicker, date_picker_assigns(socket, updated_socket))
+
+    {:noreply, updated_socket}
+  end
+
+  @impl true
+  def handle_info(:tick, %{assigns: %{count: 0}} = socket) do
+    {:noreply, assign(socket, :count, 0)}
+  end
+
+  @impl true
+  def handle_info(:tick, %{assigns: %{count: count}} = socket) when count <= 5 do
+    :erlang.send_after(1000, self(), :tick)
+
+    {:noreply, assign(socket, :count, count - 1)}
+  end
+
+  @impl true
+  def handle_info(:tick, socket), do: {:noreply, socket}
+
+  @impl true
+  def handle_info(%{topic: @topic, event: "date_reserved", payload: reservation}, socket) do
+    {
+      :noreply,
+      socket
+      |> assign(socket.assigns |> Map.delete(:flash))
+      |> assign(:count, 0)
+      |> assign(:locking_date, nil)
+      |> assign(:message, nil)
+      |> assign(:other_user_reservations, [reservation | socket.assigns.other_user_reservations])
+    }
+  end
+
+  @impl true
+  def handle_info(%{topic: @topic, event: "lock_started", payload: reservation}, socket) do
+    {
+      :noreply,
+      socket
+      |> assign(:count, 5)
+      |> assign(:locking_date, reservation.date)
+    }
+  end
+
+  @impl true
+  def handle_info(%{topic: @topic, event: "lock_ended", payload: _reservation}, socket) do
+    {:noreply, reset_assigns(socket)}
+  end
+
+  @impl true
+  def handle_info("already_locking", socket) do
+    {:noreply, assign(socket, :message, "You can only reserve one date at a time!")}
+  end
+
+  @impl true
+  def handle_info("lock_ended", socket) do
+    Endpoint.broadcast_from(self(), @topic, "lock_ended", %{})
+
+    {:noreply, reset_assigns(socket)}
+  end
+
+  defp reset_assigns(socket) do
+    socket
+    |> assign(:confirmation, false)
+    |> assign(:count, 0)
+    |> assign(:lock_timer, nil)
+    |> assign(:locking_date, nil)
+    |> assign(:message, nil)
+  end
+
+  defp date_picker_assigns(socket, updated_socket) do
+    %{
       label: "Reserve a date!",
       id: "date_picker",
       form: socket.assigns.form,
@@ -137,74 +207,6 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
       reservations: updated_socket.assigns.user_reservations,
       other_user_reservations: updated_socket.assigns.other_user_reservations,
       locking_date: updated_socket.assigns.locking_date
-    }
-
-    send_update(ReservationAppWeb.Components.DateRangePicker, date_picker_assigns)
-
-    {:noreply, updated_socket}
-  end
-
-  @impl true
-  def handle_info(:tick, socket) do
-    {
-      :noreply,
-      socket
-      |> assign(:count, socket.assigns.count - 1)
-    }
-  end
-
-  @impl true
-  def handle_info(%{topic: @topic, event: "date_reserved", payload: state}, socket) do
-    {
-      :noreply,
-      socket
-      |> assign(socket.assigns |> Map.delete(:flash))
-      |> assign(:other_user_reservations, [state | socket.assigns.other_user_reservations])
-      |> assign(:locking_date, nil)
-    }
-  end
-
-  @impl true
-  def handle_info(%{topic: @topic, event: "date_already_taken", payload: _state}, socket) do
-    {:noreply, socket}
-  end
-
-  @impl true
-  def handle_info(%{topic: @topic, event: "lock_started", payload: state}, socket) do
-    {
-      :noreply,
-      socket
-      |> assign(:lock_started, true)
-      |> assign(:locking_user, state.user_id)
-      |> assign(:locking_date, state.date)
-    }
-  end
-
-  @impl true
-  def handle_info("lock_ended", socket) do
-    ReservationAppWeb.Endpoint.broadcast_from(self(), @topic, "lock_ended", %{})
-
-    {
-      :noreply,
-      socket
-      |> assign(:lock_started, false)
-      |> assign(:locking_user, nil)
-      |> assign(:locking_date, nil)
-      |> assign(:confirmation, false)
-      |> assign(:timer_ref, nil)
-    }
-  end
-
-  @impl true
-  def handle_info(%{topic: @topic, event: "lock_ended", payload: _state}, socket) do
-    {
-      :noreply,
-      socket
-      |> assign(:lock_started, false)
-      |> assign(:locking_user, nil)
-      |> assign(:locking_date, nil)
-      |> assign(:confirmation, false)
-      |> assign(:timer_ref, nil)
     }
   end
 end
