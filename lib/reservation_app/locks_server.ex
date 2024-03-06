@@ -1,5 +1,6 @@
 defmodule ReservationApp.LocksServer do
   use GenServer
+  require Logger
 
   @name __MODULE__
   @ttl 5
@@ -7,7 +8,7 @@ defmodule ReservationApp.LocksServer do
   def start_link(_), do: GenServer.start_link(__MODULE__, [], name: @name)
 
   def init(_) do
-    IO.puts("Creating ETS #{@name}")
+    Logger.info("Creating ETS #{@name}")
 
     :ets.new(:locked_dates, [
       :set,

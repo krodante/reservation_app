@@ -1,8 +1,9 @@
 defmodule ReservationAppWeb.Live.ReservationsLive do
-  alias ReservationApp.LocksServer
-  alias ReservationApp.Reservations.Reservation
-  alias ReservationApp.Reservations
   use ReservationAppWeb, :live_view
+
+  alias ReservationApp.LocksServer
+  alias ReservationApp.Reservations
+  alias ReservationApp.Reservations.Reservation
 
   @topic "reservations"
 
@@ -35,10 +36,10 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
   end
 
   @impl true
-  def mount(_params, session, socket) do
+  def mount(_params, %{"user_id" => user_id}, socket) do
     ReservationAppWeb.Endpoint.subscribe(@topic)
 
-    changeset = Reservations.change_reservation(%Reservation{}, %{user_id: session["user_id"]})
+    changeset = Reservations.change_reservation(%Reservation{}, %{user_id: user_id})
 
     {
       :ok,
@@ -50,14 +51,14 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
       |> assign(:locking_date, nil)
       |> assign(:timer_ref, nil)
       |> assign(:reservation, %Reservation{})
-      |> assign(:user_id, session["user_id"])
+      |> assign(:user_id, user_id)
       |> assign(
         :user_reservations,
-        Reservations.list_reservations_for_user_id(session["user_id"])
+        Reservations.list_reservations_for_user_id(user_id)
       )
       |> assign(
         :other_user_reservations,
-        Reservations.list_reservations_for_other_users(session["user_id"])
+        Reservations.list_reservations_for_other_users(user_id)
       )
     }
   end
@@ -100,8 +101,7 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
     reservation_attrs = %{date: attrs.range_start, user_id: socket.assigns.user_id}
 
     updated_socket =
-      if Reservations.cache_is_nil?(reservation_attrs) and
-           Reservations.date_is_open?(reservation_attrs) do
+      if Reservations.date_is_available?(reservation_attrs) do
         LocksServer.insert(reservation_attrs.date, reservation_attrs.user_id)
 
         ReservationAppWeb.Endpoint.broadcast_from(
@@ -119,8 +119,6 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
         |> assign(:locking_date, reservation_attrs.date)
         |> assign(:timer_ref, timer_ref)
       else
-        Reservations.cache_is_nil?(reservation_attrs) |> IO.inspect()
-        Reservations.date_is_open?(reservation_attrs) |> IO.inspect()
         ReservationAppWeb.Endpoint.broadcast_from(self(), @topic, "date_already_taken", attrs)
         socket
       end
@@ -148,17 +146,14 @@ defmodule ReservationAppWeb.Live.ReservationsLive do
       :noreply,
       socket
       |> assign(socket.assigns |> Map.delete(:flash))
-      |> assign(%{other_user_reservations: [state | socket.assigns.other_user_reservations]})
+      |> assign(:other_user_reservations, [state | socket.assigns.other_user_reservations])
       |> assign(:locking_date, nil)
     }
   end
 
   @impl true
   def handle_info(%{topic: @topic, event: "date_already_taken", payload: _state}, socket) do
-    {
-      :noreply,
-      socket
-    }
+    {:noreply, socket}
   end
 
   @impl true

@@ -2,8 +2,8 @@ defmodule ReservationApp.Reservations do
   import Ecto.Query
 
   alias ReservationApp.LocksServer
-  alias ReservationApp.Reservations.Reservation
   alias ReservationApp.Repo
+  alias ReservationApp.Reservations.Reservation
 
   def create_reservation(attrs \\ %{}) do
     %Reservation{}
@@ -35,15 +35,19 @@ defmodule ReservationApp.Reservations do
     |> Repo.all()
   end
 
-  def date_is_open?(%{date: date}) do
+  def date_is_available?(%{date: date}) do
+    date_is_open?(date) && date_not_locked?(date)
+  end
+
+  def date_is_available?(_), do: true
+
+  def date_is_open?(date) do
     from(r in Reservation, where: r.date == ^date)
     |> Repo.one()
     |> is_nil()
   end
 
-  def date_is_open?(_), do: true
-
-  def cache_is_nil?(%{date: date}) do
+  def date_not_locked?(date) do
     result = :ets.lookup(:locked_dates, date)
 
     with [{_key, _value, expiry}] <- result,
@@ -58,6 +62,4 @@ defmodule ReservationApp.Reservations do
         true
     end
   end
-
-  def cache_is_nil?(_), do: true
 end

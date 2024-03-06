@@ -2,11 +2,6 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
   use ReservationAppWeb, :live_component
 
   @week_start_at :sunday
-  @fsm %{
-    set_start: :set_end,
-    set_end: :reset,
-    reset: :set_start
-  }
   @initial_state :set_start
 
   @impl true
@@ -15,17 +10,6 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
     <div class="date-range-picker">
       <.input field={@start_date_field} type="hidden" />
       <.input :if={@is_range?} field={@end_date_field} type="hidden" />
-      <div class="fake-input-tag relative w-72" phx-target={@myself}>
-        <.input
-          name={"#{@id}_display_value"}
-          required={@required}
-          readonly
-          type="text"
-          label={@label}
-          value={date_range_display(@range_start)}
-        />
-        <.icon name="hero-calendar" class="absolute top-10 right-3 flex text-gray-400" />
-      </div>
 
       <div :if={@calendar?} id={"#{@id}_calendar"} class="absolute z-50 w-72" phx-target={@myself}>
         <div
@@ -123,7 +107,7 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
       socket
       |> assign(:calendar?, true)
       |> assign(:current, format_date(current_date))
-      |> assign(:is_range?, true)
+      |> assign(:is_range?, false)
       |> assign(:range_start, nil)
       |> assign(:range_end, nil)
       |> assign(:hover_range_end, nil)
@@ -138,7 +122,6 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
   @impl true
   def update(assigns, socket) do
     range_start = from_str!(assigns.start_date_field.value)
-    range_end = from_str!(end_value(assigns))
     current_date = socket.assigns.current.date
 
     {
@@ -147,49 +130,9 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
       |> assign(assigns)
       |> assign(:current, format_date(current_date))
       |> assign(:range_start, range_start)
-      |> assign(:range_end, range_end)
       |> assign(:state, @initial_state)
     }
   end
-
-  # @impl true
-  # def handle_event("open-calendar", _, socket) do
-  #   {:noreply, socket |> assign(:calendar?, true)}
-  # end
-
-  # @impl true
-  # def handle_event("close-calendar", _, %{assigns: %{range_start: nil, range_end: nil}} = socket) do
-  #   {:noreply, socket |> assign(:calendar?, false)}
-  # end
-
-  # @impl true
-  # def handle_event("close-calendar", _, socket) do
-  #   [range_start, range_end] =
-  #     [
-  #       socket.assigns.range_start,
-  #       socket.assigns.range_end || socket.assigns.range_start
-  #     ]
-  #     |> Enum.sort(&(DateTime.compare(&1, &2) != :gt))
-
-  #   attrs = %{
-  #     id: socket.assigns.id,
-  #     start_date: range_start,
-  #     end_date: range_end,
-  #     form: socket.assigns.form
-  #   }
-
-  #   {
-  #     :noreply,
-  #     socket
-  #     |> assign(:calendar?, false)
-  #     |> assign(:end_date_field, set_field_value(socket.assigns, :end_date_field, range_end))
-  #     |> assign(
-  #       :start_date_field,
-  #       set_field_value(socket.assigns, :start_date_field, range_start)
-  #     )
-  #     |> assign(:state, @initial_state)
-  #   }
-  # end
 
   @impl true
   def handle_event("today", _, socket) do
@@ -217,14 +160,9 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
     if Date.compare(socket.assigns.min, DateTime.to_date(date_time)) == :gt do
       {:noreply, socket}
     else
-      ranges = calculate_date_ranges(socket.assigns.state, date_time)
-
-      state =
-        if socket.assigns.is_range? do
-          @fsm[socket.assigns.state]
-        else
-          @initial_state
-        end
+      ranges = %{
+        range_start: date_time
+      }
 
       send(self(), {:updated_reservation, ranges})
 
@@ -232,20 +170,10 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
         :noreply,
         socket
         |> assign(ranges)
-        |> assign(:state, state)
+        |> assign(:state, @initial_state)
       }
     end
   end
-
-  defp end_value(assigns) when is_map_key(assigns, :to) do
-    case assigns.to.value do
-      nil -> nil
-      "" -> nil
-      _ -> assigns.to.value
-    end
-  end
-
-  defp end_value(_), do: nil
 
   defp next_month_new_date(current_date, last_row) do
     last_row_last_day = last_row |> List.last()
@@ -310,42 +238,6 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
     |> Enum.chunk_every(7)
   end
 
-  defp calculate_date_ranges(:set_start, date_time) do
-    %{
-      range_start: date_time,
-      range_end: nil
-    }
-  end
-
-  defp calculate_date_ranges(:set_end, date_time), do: %{range_end: date_time}
-
-  defp calculate_date_ranges(:reset, _date_time) do
-    %{
-      range_start: nil,
-      range_end: nil
-    }
-  end
-
-  # defp set_field_value(nil, _field, _value), do: nil
-
-  # defp set_field_value(assigns, field, value) when is_binary(value) do
-  #   if Map.has_key?(assigns, field) and is_map(assigns[field]) do
-  #     {:ok, value, _} = DateTime.from_iso8601(value)
-  #     Map.put(assigns[field], :value, value)
-  #   else
-  #     nil
-  #   end
-  # end
-
-  # defp set_field_value(assigns, field, value) do
-  #   if Map.has_key?(assigns, field) and is_map(assigns[field]) do
-  #     {:ok, value, _} = DateTime.from_iso8601(Date.to_string(value) <> "T00:00:00Z")
-  #     Map.put(assigns[field], :value, value)
-  #   else
-  #     nil
-  #   end
-  # end
-
   defp before_min_date?(day, min) do
     Date.compare(day, min) == :lt
   end
@@ -388,26 +280,4 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
   end
 
   defp from_str!(date_time_str), do: date_time_str
-
-  defp date_range_display(start_date) when start_date in [nil, ""] do
-    "MM/DD/YYYY"
-  end
-
-  defp date_range_display(start_date) do
-    start_date_datetime = extract_date(start_date)
-    "#{Calendar.strftime(start_date_datetime, "%b %d, %Y")}"
-  end
-
-  defp extract_date(input) when input in [nil, ""], do: Date.utc_today()
-
-  defp extract_date(datetime_string) when is_binary(datetime_string) do
-    datetime_string
-    |> String.split("T")
-    |> List.first()
-    |> Date.from_iso8601!()
-  end
-
-  defp extract_date(%DateTime{} = datetime), do: DateTime.to_date(datetime)
-  defp extract_date(%NaiveDateTime{} = datetime), do: NaiveDateTime.to_date(datetime)
-  defp extract_date(%{calendar: Calendar.ISO} = datetime), do: datetime
 end
