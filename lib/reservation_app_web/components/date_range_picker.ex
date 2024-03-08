@@ -11,7 +11,7 @@ defmodule ReservationAppWeb.Components.DateRangePicker do
       <.input field={@start_date_field} type="hidden" />
       <.input :if={@is_range?} field={@end_date_field} type="hidden" />
 
-      <div :if={@calendar?} id={"#{@id}_calendar"} class="absolute z-50 w-72" phx-target={@myself}>
+      <div :if={@calendar?} id={"#{@id}_calendar"} class="z-50 w-72" phx-target={@myself}>
         <div
           id="calendar_background"
           class="w-full bg-white rounded-md ring-1 ring-black ring-opacity-2 focus:outline-none p-3"

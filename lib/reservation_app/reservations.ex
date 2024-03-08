@@ -3,7 +3,23 @@ defmodule ReservationApp.Reservations do
 
   alias ReservationApp.LocksServer
   alias ReservationApp.Repo
+  alias ReservationApp.Reservations.Event
   alias ReservationApp.Reservations.Reservation
+
+  def create_event(attrs \\ %{}) do
+    %Event{}
+    |> Event.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def change_event(%Event{} = event, attrs \\ %{}) do
+    Event.changeset(event, attrs)
+  end
+
+  def list_events do
+    from(e in Event, order_by: [desc: :inserted_at])
+    |> Repo.all()
+  end
 
   def create_reservation(attrs \\ %{}) do
     %Reservation{}
